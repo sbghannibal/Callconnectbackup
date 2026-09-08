@@ -30,7 +30,44 @@ final class Config
         public readonly string $username = '',
         public readonly string $password = '',
         public readonly int $timeout = 30,
+        public readonly string $discoverySeedPaths = '',
+        public readonly string $discoveryAllowPatterns = '',
+        public readonly int $discoveryMaxDepth = 2,
+        public readonly int $discoveryMaxPages = 50,
     ) {
+    }
+
+    /**
+     * Pages the crawler starts from. Falls back to the configured data path.
+     *
+     * @return array<int, string>
+     */
+    public function seedPaths(): array
+    {
+        $paths = self::splitList($this->discoverySeedPaths);
+
+        return $paths === [] ? array_values(array_filter([$this->dataPath])) : $paths;
+    }
+
+    /**
+     * Path patterns the crawler is allowed to visit ("*" is a wildcard).
+     * An empty list means: everything inside the base URL.
+     *
+     * @return array<int, string>
+     */
+    public function allowPatterns(): array
+    {
+        return self::splitList($this->discoveryAllowPatterns);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function splitList(string $value): array
+    {
+        $items = array_map('trim', preg_split('/[,\n]/', $value) ?: []);
+
+        return array_values(array_filter($items, static fn (string $item): bool => $item !== ''));
     }
 
     public static function fromEnv(array $env = null): self
@@ -61,6 +98,10 @@ final class Config
             username: $get('CALLCONNECT_USERNAME', ''),
             password: $get('CALLCONNECT_PASSWORD', ''),
             timeout: (int) $get('CALLCONNECT_TIMEOUT', '30'),
+            discoverySeedPaths: $get('CALLCONNECT_DISCOVERY_SEEDS', ''),
+            discoveryAllowPatterns: $get('CALLCONNECT_DISCOVERY_ALLOW', ''),
+            discoveryMaxDepth: (int) $get('CALLCONNECT_DISCOVERY_MAX_DEPTH', '2'),
+            discoveryMaxPages: (int) $get('CALLCONNECT_DISCOVERY_MAX_PAGES', '50'),
         );
     }
 

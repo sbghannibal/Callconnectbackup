@@ -92,4 +92,25 @@ final class HttpCallConnectClientTest extends TestCase
         $this->assertFalse($response->success);
         $this->assertSame(401, $response->statusCode);
     }
+
+    public function testFetchPageReturnsTheRawHtmlOfAPortalPage(): void
+    {
+        $client = $this->client();
+        $client->login('tester', 'secret');
+
+        $response = $client->fetchPage('/portal/users/A1');
+
+        $this->assertTrue($response->success, $response->message);
+        $this->assertSame(200, $response->statusCode);
+        $this->assertStringContainsString('text/html', $response->contentType);
+        $this->assertStringContainsString('Do Not Disturb', $response->body);
+    }
+
+    public function testFetchPageWithoutLoginIsRejected(): void
+    {
+        $response = $this->client()->fetchPage('/portal/users');
+
+        $this->assertFalse($response->success);
+        $this->assertSame(401, $response->statusCode);
+    }
 }
