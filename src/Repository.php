@@ -267,4 +267,151 @@ final class Repository
 
         return $stmt->fetchAll();
     }
+
+    /* ----------------------------------------------------------- discovery */
+
+    /**
+     * @param array<int, string> $seeds
+     */
+    public function startDiscoveryRun(array $seeds): int
+    {
+        $stmt = $this->pdo->prepare('INSERT INTO discovery_runs (started_at, seeds) VALUES (?, ?)');
+        $stmt->execute([$this->now(), implode(', ', $seeds)]);
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    public function finishDiscoveryRun(int $runId, bool $success, int $pages, int $fields, string $message): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE discovery_runs SET finished_at = ?, success = ?, pages = ?, fields = ?, message = ? WHERE id = ?'
+        );
+        $stmt->execute([$this->now(), $success ? 1 : 0, $pages, $fields, $message, $runId]);
+    }
+
+    /**
+     * Stores one crawled page plus everything that was extracted from it. The
+     * raw HTML is always kept, so fields that are not recognised yet can still
+     * be reviewed later.
+     *
+     * @param array<string, mixed>             $page
+     * @param array<int, array<string, mixed>> $fields
+     */
+    public function saveDiscoveredPage(int $runId, array $page, array $fields): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO discovery_pages
+                (run_id, url, path, title, depth, status_code, content_type, tabs_json, links_json, forms_json, raw_html, fetched_at)
+             VALUES (:run_id, :url, :path, :title, :depth, :status_code, :content_type, :tabs, :links, :forms, :raw_html, :fetched_at)
+             ON DUPLICATE KEY UPDATE
+                url = VALUES(url), title = VALUES(title), depth = VALUES(depth), status_code = VALUES(status_code),
+                content_type = VALUES(content_type), tabs_json = VALUES(tabs_json), links_json = VALUES(links_json),
+                forms_json = VALUES(forms_json), raw_html = VALUES(raw_html), fetched_at = VALUES(fetched_at)'
+        );
+        $stmt->execute([
+            ':run_id' => $runId,
+            ':url' => mb_substr((string) ($page['url'] ?? ''), 0, 1024),
+            ':path' => mb_substr((string) ($page['path'] ?? ''), 0, 190),
+            ':title' => mb_substr((string) ($page['title'] ?? ''), 0, 255),
+            ':depth' => (int) ($page['depth'] ?? 0),
+            ':status_code' => $page['status_code'] ?? null,
+            ':content_type' => mb_substr((string) ($page['content_type'] ?? ''), 0, 190),
+            ':tabs' => $this->encode($page['tabs'] ?? []),
+            ':links' => $this->encode($page['links'] ?? []),
+            ':forms' => $this->encode($page['forms'] ?? []),
+            ':raw_html' => (string) ($page['raw_html'] ?? ''),
+            ':fetched_at' => $this->now(),
+        ]);
+
+        $pageId = (int) $this->pdo->lastInsertId();
+        if ($pageId === 0) {
+            $stmt = $this->pdo->prepare('SELECT id FROM discovery_pages WHERE run_id = ? AND path = ?');
+            $stmt->execute([$runId, mb_substr((string) ($page['path'] ?? ''), 0, 190)]);
+            $pageId = (int) $stmt->fetchColumn();
+        }
+
+        $this->pdo->prepare('DELETE FROM discovery_fields WHERE page_id = ?')->execute([$pageId]);
+
+        $insert = $this->pdo->prepare(
+            'INSERT INTO discovery_fields
+                (page_id, kind, section, label, name, element_id, field_type, value, selected, options_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        foreach ($fields as $field) {
+            $selected = $field['selected'] ?? null;
+            $insert->execute([
+                $pageId,
+                mb_substr((string) ($field['kind'] ?? 'detail'), 0, 32),
+                mb_substr((string) ($field['section'] ?? ''), 0, 255),
+                mb_substr((string) ($field['label'] ?? ''), 0, 255),
+                mb_substr((string) ($field['name'] ?? ''), 0, 255),
+                mb_substr((string) ($field['element_id'] ?? ''), 0, 255),
+                mb_substr((string) ($field['type'] ?? ''), 0, 64),
+                (string) ($field['value'] ?? ''),
+                $selected === null ? null : ($selected ? 1 : 0),
+                $this->encode($field['options'] ?? []),
+            ]);
+        }
+
+        return $pageId;
+    }
+
+    public function lastDiscoveryRun(): ?array
+    {
+        $row = $this->pdo->query('SELECT * FROM discovery_runs ORDER BY id DESC LIMIT 1')->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    public function listDiscoveryRuns(int $limit = 25): array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM discovery_runs ORDER BY id DESC LIMIT :limit');
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listDiscoveredPages(?int $runId = null): array
+    {
+        if ($runId === null) {
+            $runId = (int) ($this->lastDiscoveryRun()['id'] ?? 0);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT p.*, (SELECT COUNT(*) FROM discovery_fields f WHERE f.page_id = p.id) AS field_count
+             FROM discovery_pages p WHERE p.run_id = ? ORDER BY p.depth, p.path'
+        );
+        $stmt->execute([$runId]);
+
+        return $stmt->fetchAll();
+    }
+
+    public function getDiscoveredPage(int $pageId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM discovery_pages WHERE id = ?');
+        $stmt->execute([$pageId]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listDiscoveredFields(int $pageId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM discovery_fields WHERE page_id = ? ORDER BY id');
+        $stmt->execute([$pageId]);
+
+        return $stmt->fetchAll();
+    }
+
+    private function encode(mixed $value): string
+    {
+        return (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
 }

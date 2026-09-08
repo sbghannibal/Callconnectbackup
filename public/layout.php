@@ -65,6 +65,7 @@ function render_header(string $title, string $active): void
     <h1>CallConnect Backup</h1>
     <nav>
         <a href="index.php"<?= $active === 'data' ? ' class="active"' : '' ?>>Data &amp; parameters</a>
+        <a href="discovery.php"<?= $active === 'discovery' ? ' class="active"' : '' ?>>Ontdekking</a>
         <a href="logs.php"<?= $active === 'logs' ? ' class="active"' : '' ?>>Logboek</a>
     </nav>
 </header>

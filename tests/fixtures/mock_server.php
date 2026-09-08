@@ -41,6 +41,20 @@ if (empty($_SESSION['authenticated'])) {
     exit;
 }
 
+// HTML pages of the portal, used by the discovery crawler tests.
+$pages = [
+    '/portal/users' => 'users.html',
+    '/portal/users/A1' => 'user_detail.html',
+    '/portal/users/A2' => 'user_detail_a2.html',
+    '/admin/system' => 'admin_system.html',
+];
+
+if (isset($pages[(string) $path]) && $method === 'GET') {
+    header('Content-Type: text/html; charset=utf-8');
+    readfile(__DIR__ . '/pages/' . $pages[(string) $path]);
+    exit;
+}
+
 if ($path === '/api/subscribers' && $method === 'GET') {
     echo json_encode(['items' => array_values($records)]);
     exit;

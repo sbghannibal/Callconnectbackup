@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>User A1 - Reception</title>
+</head>
+<body>
+<h1>Reception</h1>
+
+<ul class="nav-tabs">
+    <li role="tab" data-tab="details"><a href="/portal/users/A1?tab=details">Details</a></li>
+    <li role="tab" data-tab="licenses"><a href="/portal/users/A1?tab=licenses">Licenses</a></li>
+    <li role="tab" data-tab="numbers"><a href="/portal/users/A1?tab=numbers">Phone numbers</a></li>
+    <li role="tab" data-tab="incoming"><a href="/portal/users/A1?tab=incoming">Incoming calls</a></li>
+</ul>
+
+<section class="card" data-section="Details">
+    <h2>Details</h2>
+    <dl>
+        <dt>User ID</dt><dd>A1</dd>
+        <dt>First name</dt><dd>Anna</dd>
+        <dt>Last name</dt><dd>Peeters</dd>
+        <dt>Language</dt><dd>Nederlands</dd>
+        <dt>E-mail address</dt><dd>anna.peeters@example.be</dd>
+        <dt>Timezone</dt><dd>Europe/Brussels</dd>
+        <dt>Department</dt><dd>Reception</dd>
+    </dl>
+</section>
+
+<section class="card">
+    <h2>Phone numbers</h2>
+    <table>
+        <tr><th>Extension</th><th>Phone number</th><th>Outgoing CLI</th></tr>
+        <tr><td>1001</td><td>022001000</td><td>022001000</td></tr>
+    </table>
+</section>
+
+<section class="card">
+    <h2>Licenses</h2>
+    <ul>
+        <li>Standard: yes</li>
+        <li>Advance: no</li>
+        <li>Mobility: no</li>
+        <li>Softphone: yes</li>
+    </ul>
+</section>
+
+<form action="/portal/users/A1/settings" method="post" name="incoming-calls">
+    <fieldset>
+        <legend>Incoming calls</legend>
+        <label for="dnd">Do Not Disturb</label>
+        <input type="checkbox" id="dnd" name="do_not_disturb" value="1" checked>
+
+        <label for="call-waiting">Allow second incoming call</label>
+        <input type="checkbox" id="call-waiting" name="call_waiting" value="1">
+
+        <label for="plan">Incoming calling plan</label>
+        <select id="plan" name="incoming_calling_plan">
+            <option value="all">All calls</option>
+            <option value="internal" selected>Internal only</option>
+        </select>
+
+        <label for="forward">Call Forwarding Services</label>
+        <input type="text" id="forward" name="call_forwarding" value="022001099">
+
+        <input type="hidden" name="csrf" value="token">
+        <input type="password" name="password" value="never-stored">
+    </fieldset>
+</form>
+
+<script type="application/json" id="user-json">
+{"userId": "A1", "sequentialRinging": false, "pushToTalk": true}
+</script>
+</body>
+</html>

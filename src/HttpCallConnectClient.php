@@ -9,7 +9,7 @@ namespace App;
  * format and the field names are all configurable, because they can differ per
  * CallConnect environment.
  */
-final class HttpCallConnectClient implements CallConnectClientInterface
+final class HttpCallConnectClient implements CallConnectClientInterface, PageFetcherInterface
 {
     private ?string $cookieFile = null;
 
@@ -61,6 +61,66 @@ final class HttpCallConnectClient implements CallConnectClientInterface
         $path = str_replace('{id}', rawurlencode($externalId), $this->config->pushPath);
 
         return $this->request($this->config->pushMethod, $path, $payload);
+    }
+
+    /**
+     * Authenticated GET that keeps the response body untouched, so the
+     * discovery crawler can parse HTML pages.
+     */
+    public function fetchPage(string $pathOrUrl): PageResponse
+    {
+        $url = $this->absoluteUrl($pathOrUrl);
+        $handle = curl_init();
+
+        $options = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_TIMEOUT => $this->config->timeout,
+            CURLOPT_CUSTOMREQUEST => 'GET',
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8'],
+        ];
+
+        if ($this->cookieFile !== null) {
+            $options[CURLOPT_COOKIEJAR] = $this->cookieFile;
+            $options[CURLOPT_COOKIEFILE] = $this->cookieFile;
+        }
+
+        curl_setopt_array($handle, $options);
+
+        $raw = curl_exec($handle);
+        $statusCode = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $contentType = (string) (curl_getinfo($handle, CURLINFO_CONTENT_TYPE) ?? '');
+        $effectiveUrl = (string) (curl_getinfo($handle, CURLINFO_EFFECTIVE_URL) ?: $url);
+        $error = curl_error($handle);
+        curl_close($handle);
+
+        if ($raw === false) {
+            return new PageResponse(false, $url, null, '', '', $error !== '' ? $error : 'Request failed');
+        }
+
+        $success = $statusCode >= 200 && $statusCode < 300;
+
+        return new PageResponse(
+            $success,
+            $effectiveUrl,
+            $statusCode,
+            (string) $raw,
+            $contentType,
+            sprintf('HTTP %d', $statusCode)
+        );
+    }
+
+    private function absoluteUrl(string $pathOrUrl): string
+    {
+        if (preg_match('#^https?://#i', $pathOrUrl) === 1) {
+            return $pathOrUrl;
+        }
+
+        return $this->config->baseUrl . '/' . ltrim($pathOrUrl, '/');
     }
 
     /**
